@@ -1,0 +1,161 @@
+name: Update Formula
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [new-release]
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: suzuki-shunsuke/pinact-action@28aeb220eb3252ad0d4422dd5d9368e925acbd8d # v1.3.0
+        with:
+          skip_push: "true"
+
+  update-formula:
+    needs: [pin]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Get latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_TAG=$(gh release list --repo kimulaco/term-survivors --limit 1 --json tagName --jq '.[0].tagName')
+
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            echo "Error: No releases found or unable to get valid tag_name"
+            exit 1
+          fi
+
+          if ! echo "$LATEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "Error: Invalid tag format: $LATEST_TAG"
+            exit 1
+          fi
+
+          echo "Found latest release: $LATEST_TAG"
+          echo "version=${LATEST_TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Check if update needed
+        id: check
+        run: |
+          CURRENT_VERSION=$(awk -F '"' '/^  version "/ {print $2; exit}' Formula/term-survivors.rb)
+          LATEST_VERSION="${{ steps.release.outputs.version }}"
+
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "Error: Could not extract version from Formula/term-survivors.rb"
+            exit 1
+          fi
+
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "Current: $CURRENT_VERSION, Latest: $LATEST_VERSION"
+          else
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            echo "Already up to date: $CURRENT_VERSION"
+          fi
+
+      - name: Download checksums
+        if: steps.check.outputs.update_needed == 'true'
+        id: checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh release download "v${VERSION}" --repo kimulaco/term-survivors \
+            --pattern "term-survivors-darwin-arm64.tar.gz.sha256" \
+            --pattern "term-survivors-darwin-x64.tar.gz.sha256" \
+            --pattern "term-survivors-linux-x64.tar.gz.sha256" \
+            --pattern "term-survivors-linux-arm64.tar.gz.sha256"
+
+          DARWIN_ARM64_SHA=$(cut -d' ' -f1 term-survivors-darwin-arm64.tar.gz.sha256)
+          DARWIN_X64_SHA=$(cut -d' ' -f1 term-survivors-darwin-x64.tar.gz.sha256)
+          LINUX_X64_SHA=$(cut -d' ' -f1 term-survivors-linux-x64.tar.gz.sha256)
+          LINUX_ARM64_SHA=$(cut -d' ' -f1 term-survivors-linux-arm64.tar.gz.sha256)
+
+          if [ -z "$DARWIN_ARM64_SHA" ] || [ -z "$DARWIN_X64_SHA" ] || [ -z "$LINUX_X64_SHA" ] || [ -z "$LINUX_ARM64_SHA" ]; then
+            echo "Error: Failed to read one or more checksums"
+            exit 1
+          fi
+
+          echo "  darwin-arm64: $DARWIN_ARM64_SHA"
+          echo "  darwin-x64:   $DARWIN_X64_SHA"
+          echo "  linux-x64:    $LINUX_X64_SHA"
+          echo "  linux-arm64:  $LINUX_ARM64_SHA"
+
+          echo "darwin_arm64_sha=$DARWIN_ARM64_SHA" >> $GITHUB_OUTPUT
+          echo "darwin_x64_sha=$DARWIN_X64_SHA" >> $GITHUB_OUTPUT
+          echo "linux_x64_sha=$LINUX_X64_SHA" >> $GITHUB_OUTPUT
+          echo "linux_arm64_sha=$LINUX_ARM64_SHA" >> $GITHUB_OUTPUT
+
+          rm -f term-survivors-*.sha256
+
+      - name: Update Formula
+        if: steps.check.outputs.update_needed == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          DARWIN_ARM64_SHA: ${{ steps.checksums.outputs.darwin_arm64_sha }}
+          DARWIN_X64_SHA: ${{ steps.checksums.outputs.darwin_x64_sha }}
+          LINUX_X64_SHA: ${{ steps.checksums.outputs.linux_x64_sha }}
+          LINUX_ARM64_SHA: ${{ steps.checksums.outputs.linux_arm64_sha }}
+        run: |
+          sed -i 's/version ".*"/version "'"$VERSION"'"/' Formula/term-survivors.rb
+          sed -i 's/darwin_arm64_sha256 = ".*"/darwin_arm64_sha256 = "'"$DARWIN_ARM64_SHA"'"/' Formula/term-survivors.rb
+          sed -i 's/darwin_x64_sha256 = ".*"/darwin_x64_sha256 = "'"$DARWIN_X64_SHA"'"/' Formula/term-survivors.rb
+          sed -i 's/linux_x64_sha256 = ".*"/linux_x64_sha256 = "'"$LINUX_X64_SHA"'"/' Formula/term-survivors.rb
+          sed -i 's/linux_arm64_sha256 = ".*"/linux_arm64_sha256 = "'"$LINUX_ARM64_SHA"'"/' Formula/term-survivors.rb
+
+      - name: Commit and create pull request
+        if: steps.check.outputs.update_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          DARWIN_ARM64_SHA: ${{ steps.checksums.outputs.darwin_arm64_sha }}
+          DARWIN_X64_SHA: ${{ steps.checksums.outputs.darwin_x64_sha }}
+          LINUX_X64_SHA: ${{ steps.checksums.outputs.linux_x64_sha }}
+          LINUX_ARM64_SHA: ${{ steps.checksums.outputs.linux_arm64_sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="update-v${VERSION}"
+          git checkout -b "$BRANCH"
+          git add Formula/term-survivors.rb
+          git commit -m "Update term-survivors to v${VERSION}"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Summary"
+            echo ""
+            echo "Auto-update term-survivors Formula to version \`v${VERSION}\`."
+            echo ""
+            echo "### Changes"
+            echo "- Update version to \`${VERSION}\`"
+            echo "- Update SHA256 checksums for all platform binaries:"
+            echo "  - macOS ARM64: \`${DARWIN_ARM64_SHA}\`"
+            echo "  - macOS Intel: \`${DARWIN_X64_SHA}\`"
+            echo "  - Linux x64: \`${LINUX_X64_SHA}\`"
+            echo "  - Linux ARM64: \`${LINUX_ARM64_SHA}\`"
+            echo ""
+            echo "### Verification"
+            echo "- ✅ Checksums downloaded from official release assets"
+            echo "- ✅ All platform binaries available"
+            echo ""
+            echo "This PR was automatically generated from the [term-survivors release](https://github.com/kimulaco/term-survivors/releases/tag/v${VERSION})."
+          } > "$TMPDIR/pr-body.md"
+
+          gh pr create \
+            --title "Update term-survivors to v${VERSION}" \
+            --base main \
+            --head "$BRANCH" \
+            --body-file "$TMPDIR/pr-body.md"
