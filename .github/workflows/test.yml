@@ -30,9 +30,6 @@ jobs:
       - name: Verify Formula syntax
         run: ruby -c Formula/term-survivors.rb
 
-      - name: Tap local repository
-        run: brew tap kimulaco/term-survivors "$GITHUB_WORKSPACE"
-
       - name: Audit formula
         run: brew audit --formula term-survivors
 
