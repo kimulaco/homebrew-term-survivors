@@ -1,9 +1,8 @@
 class TermSurvivors < Formula
-  desc "A Vampire Survivors-like roguelike shooter that runs in the terminal"
+  desc "Vampire Survivors-like roguelike shooter that runs in the terminal"
   homepage "https://github.com/kimulaco/term-survivors"
-  license "MIT"
-
   version "0.3.0"
+  license "MIT"
 
   darwin_arm64_sha256 = "9090b31782188673b20e30e6bc282e879546bd7385422aba90e4c5ba45812524"
   darwin_x64_sha256 = "b4dd75b2ca259bd2a71baf9b2775937bfc95acaedc9ec7911e41e92a9518c529"

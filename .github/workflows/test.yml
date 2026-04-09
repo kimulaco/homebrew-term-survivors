@@ -7,11 +7,40 @@ on:
   pull_request:
 
 jobs:
-  audit:
-    runs-on: macos-latest
+  check_pinact:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: suzuki-shunsuke/pinact-action@28aeb220eb3252ad0d4422dd5d9368e925acbd8d # v1.3.0
+        with:
+          skip_push: "true"
+
+  test-formula:
+    needs: [check_pinact]
+    name: Test formula on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: Homebrew/actions/setup-homebrew@fc695c54c2032716dd4cedd007489c8e32fc8a5d # main
+
+      - name: Verify Formula syntax
+        run: ruby -c Formula/term-survivors.rb
+
       - name: Tap local repository
         run: brew tap kimulaco/term-survivors "$GITHUB_WORKSPACE"
+
       - name: Audit formula
         run: brew audit --formula term-survivors
+
+      - name: Fetch formula
+        run: brew fetch --formula term-survivors
+
+      - name: Install formula
+        run: brew install --formula term-survivors
+
+      - name: Test formula
+        run: brew test term-survivors
