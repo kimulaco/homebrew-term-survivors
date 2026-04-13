@@ -152,10 +152,10 @@ jobs:
             echo "- ✅ All platform binaries available"
             echo ""
             echo "This PR was automatically generated from the [term-survivors release](https://github.com/kimulaco/term-survivors/releases/tag/v${VERSION})."
-          } > "$TMPDIR/pr-body.md"
+          } > "$RUNNER_TEMP/pr-body.md"
 
           gh pr create \
             --title "Update term-survivors to v${VERSION}" \
             --base main \
             --head "$BRANCH" \
-            --body-file "$TMPDIR/pr-body.md"
+            --body-file "$RUNNER_TEMP/pr-body.md"
