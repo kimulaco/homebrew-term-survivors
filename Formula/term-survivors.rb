@@ -1,13 +1,13 @@
 class TermSurvivors < Formula
   desc "Vampire Survivors-like roguelike shooter that runs in the terminal"
   homepage "https://github.com/kimulaco/term-survivors"
-  version "0.4.1"
+  version "0.4.2"
   license "MIT"
 
-  darwin_arm64_sha256 = "541c647986df29d26d8f57114f3ba1e23ce70173ffe74a1240012a5f4925fb63"
-  darwin_x64_sha256 = "3e034b629b42bc82161a704fa16c71dfa02b9508378969e968a7f5fbc88de990"
-  linux_x64_sha256 = "04a686c9dd3ad219d810f8676dcd893dbc1a4500ad664a4c589f1c0bb9de48e8"
-  linux_arm64_sha256 = "57549853c2d2b9fda4ecdacf675d6f14f644c5574ffb253dbd13aec06e1c5f2e"
+  darwin_arm64_sha256 = "ff7b5189f99378ba614fb7ee22429be99d03bfd9d52654fc526ff5cebe21e1b7"
+  darwin_x64_sha256 = "7c1f21428e7ef778ef9c4019122f84641069e0d46f6f1153784134535caf8c33"
+  linux_x64_sha256 = "61888c6699e8cc70a4abc1e381863747a275055efd857979818d256c4b13b119"
+  linux_arm64_sha256 = "ca4edf6f5c9668f5f2858ea11697228e18e91052f82ab754d56f2267f7250020"
 
   on_macos do
     if Hardware::CPU.arm?
